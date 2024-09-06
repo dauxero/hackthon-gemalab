@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BioVive - Trazabilidad de Plantas</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      h1 {
+        color: #2c3e50;
+      }
+      form {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        margin-top: 10px;
+      }
+      input,
+      button {
+        padding: 10px;
+        margin-top: 5px;
+        width: 100%;
+        max-width: 400px;
+        border: 1px solid #bdc3c7;
+        border-radius: 4px;
+      }
+      button {
+        background-color: #2980b9;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #3498db;
+      }
+      #resultado {
+        margin-top: 20px;
+      }
+      .autocomplete-suggestions {
+        border: 1px solid #bdc3c7;
+        border-radius: 4px;
+        max-height: 150px;
+        overflow-y: auto;
+        position: absolute;
+        background-color: white;
+        width: calc(100% - 22px);
+        z-index: 1000;
+      }
+      .autocomplete-suggestion {
+        padding: 10px;
+        cursor: pointer;
+      }
+      .autocomplete-suggestion:hover {
+        background-color: #ecf0f1;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>BioVive - Trazabilidad de Plantas</h1>
+
+    <!-- Formulario para registrar una planta -->
+    <form id="registroForm">
+      <h2>Registrar Planta</h2>
+      <label for="tag_unico">Tag Único</label>
+      <input type="text" id="tag_unico" name="tag_unico" required />
+
+      <label for="especie">Especie</label>
+      <input type="text" id="especie" name="especie" required />
+
+      <label for="fecha_germinacion">Fecha de Germinación</label>
+      <input
+        type="date"
+        id="fecha_germinacion"
+        name="fecha_germinacion"
+        required
+      />
+
+      <label for="condiciones_crecimiento">Condiciones de Crecimiento</label>
+      <input
+        type="text"
+        id="condiciones_crecimiento"
+        name="condiciones_crecimiento"
+        required
+      />
+
+      <button type="submit">Registrar Planta</button>
+    </form>
+
+    <!-- Formulario para buscar una planta por su tag -->
+    <form id="buscarForm">
+      <h2>Buscar Planta</h2>
+      <label for="buscar_tag_unico">Tag Único</label>
+      <input
+        type="text"
+        id="buscar_tag_unico"
+        name="buscar_tag_unico"
+        required
+      />
+
+      <button type="submit">Buscar Planta</button>
+    </form>
+
+    <!-- Contenedor para mostrar los resultados de la búsqueda -->
+    <div id="resultado"></div>
+
+    <!-- Contenedor para mostrar las sugerencias de autocompletado -->
+    <div id="autocomplete-container"></div>
+
+    <script>
+      const registroForm = document.querySelector("#registroForm");
+      registroForm.addEventListener("submit", (event) => {
+        event.preventDefault(); // Evitar recargar la página
+
+        const formData = new FormData(registroForm);
+        const data = Object.fromEntries(formData.entries());
+
+        fetch("http://localhost:3000/planta", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.id) {
+              alert(`Planta registrada con éxito. ID: ${result.id}`);
+              registroForm.reset();
+            } else {
+              alert("Error al registrar la planta.");
+            }
+          })
+          .catch((error) => console.error("Error:", error));
+      });
+
+      const buscarForm = document.querySelector("#buscarForm");
+      buscarForm.addEventListener("submit", (event) => {
+        event.preventDefault(); // Evitar recargar la página
+
+        const tag_unico = document.querySelector("#buscar_tag_unico").value;
+
+        fetch(`http://localhost:3000/planta/${tag_unico}`)
+          .then((response) => response.json())
+          .then((data) => {
+            if (data) {
+              document.getElementById("resultado").innerHTML = `
+                        <h3>Detalles de la Planta</h3>
+                        <p><strong>Especie:</strong> ${data.especie}</p>
+                        <p><strong>Fecha de Germinación:</strong> ${data.fecha_germinacion}</p>
+                        <p><strong>Condiciones de Crecimiento:</strong> ${data.condiciones_crecimiento}</p>
+                    `;
+            } else {
+              document.getElementById("resultado").innerHTML =
+                "<p>Planta no encontrada.</p>";
+            }
+          })
+          .catch((error) => {
+            document.getElementById("resultado").innerHTML =
+              "<p>Error al buscar la planta.</p>";
+            console.error("Error:", error);
+          });
+      });
+
+      const buscarInput = document.querySelector("#buscar_tag_unico");
+      buscarInput.addEventListener("input", () => {
+        const query = buscarInput.value;
+        if (query.length > 2) {
+          // Solo hacer la búsqueda si el texto tiene más de 2 caracteres
+          fetch(`http://localhost:3000/tags`)
+            .then((response) => response.json())
+            .then((tags) => {
+              const suggestions = tags.filter((tag) =>
+                tag.toLowerCase().includes(query.toLowerCase())
+              );
+              showSuggestions(suggestions);
+            })
+            .catch((error) => console.error("Error:", error));
+        } else {
+          clearSuggestions();
+        }
+      });
+
+      function showSuggestions(suggestions) {
+        const container = document.getElementById("autocomplete-container");
+        container.innerHTML = "";
+        if (suggestions.length === 0) {
+          return;
+        }
+
+        const suggestionsList = document.createElement("div");
+        suggestionsList.className = "autocomplete-suggestions";
+
+        suggestions.forEach((tag) => {
+          const suggestionItem = document.createElement("div");
+          suggestionItem.className = "autocomplete-suggestion";
+          suggestionItem.textContent = tag;
+          suggestionItem.addEventListener("click", () => {
+            buscarInput.value = tag;
+            clearSuggestions();
+          });
+          suggestionsList.appendChild(suggestionItem);
+        });
+
+        container.appendChild(suggestionsList);
+      }
+
+      function clearSuggestions() {
+        document.getElementById("autocomplete-container").innerHTML = "";
+      }
+    </script>
+  </body>
+</html>
